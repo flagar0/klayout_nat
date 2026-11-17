@@ -1,3 +1,5 @@
+<p align="center"><img src="icons/nat.svg" width="128" alt="N.A.T icon"></p>
+
 # N.A.T
 
 ### Netlist Aware Toolkit
@@ -17,12 +19,13 @@ parasitics are one click away, and the devices keep the names and nets of your n
 - **Made for IIC-OSIC-TOOLS:** runs inside the [IIC-OSIC-TOOLS](https://github.com/iic-jku/IIC-OSIC-TOOLS)
   container, which already provides KLayout, the PDKs, Magic, xschem and klayout-pex.
 
+![LiveDRC: the DRC runs when the layout is saved and the markers open in the Marker Browser](doc/gifs/live_drc.gif)
+
 ![LivePEX: Magic extraction of the current layout, with the extracted netlist in the panel](doc/gifs/livepex.gif)
 
-![Ratsnest: selecting an imported device draws lines to the devices and pins on the same nets](doc/gifs/ratsnest.gif)
+![Import Netlist: an xschem netlist placed as SG13G2 devices at the schematic positions](doc/gifs/import_netlist.gif)
 
-Videos: [LiveDRC running on save](doc/gifs/live_drc.mp4) and
-[Import Netlist with xschem placement](doc/gifs/import_netlist.mp4).
+![Ratsnest: selecting an imported device draws lines to the devices and pins on the same nets](doc/gifs/ratsnest.gif)
 
 ## Status
 
