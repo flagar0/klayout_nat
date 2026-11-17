@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <klayout-macro>
- <description>Test Live DRC Plugin</description>
+ <description>Test LiveDRC Plugin</description>
  <version/>
  <category>pymacros</category>
  <prolog/>
@@ -18,7 +18,7 @@
  <text>import pya
 
 print("=" * 60)
-print("DEBUG: Testando Live DRC Plugin")
+print("DEBUG: Testando LiveDRC Plugin")
 print("=" * 60)
 
 # Verifica se plugin carregou

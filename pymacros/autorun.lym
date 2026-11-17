@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <klayout-macro>
- <description>Live DRC Auto-start</description>
+ <description>LiveDRC Auto-start</description>
  <version/>
  <category>pymacros</category>
  <prolog/>

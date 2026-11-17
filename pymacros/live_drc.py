@@ -1,4 +1,4 @@
-"""Live DRC Plugin - executa o DRC do PDK automaticamente ao salvar o layout.
+"""LiveDRC Plugin - executa o DRC do PDK automaticamente ao salvar o layout.
 
 Ao detectar que o arquivo GDS/OAS foi salvo (via polling de mtime),
 o plugin executa o script run_drc.py do PDK IHP SG13G2 diretamente
@@ -93,14 +93,14 @@ class LiveDRC:
         self.monitor_timer = None
 
         self.setup_menu()
-        print("[Live DRC] Plugin started")
+        print("[LiveDRC] Plugin started")
 
     def setup_menu(self):
         """Cria o botão na toolbar e inicializa os timers."""
         try:
             self.main_window = pya.Application.instance().main_window()
             if not self.main_window:
-                print("[Live DRC] Error: main window not found")
+                print("[LiveDRC] Error: main window not found")
                 return False
 
             self.action = pya.Action()
@@ -119,11 +119,11 @@ class LiveDRC:
             self.monitor_timer = pya.QTimer(self.main_window)
             self.monitor_timer.timeout += self.monitor_drc_output
 
-            print("[Live DRC] Toolbar button created")
+            print("[LiveDRC] Toolbar button created")
             return True
 
         except Exception as e:
-            print(f"[Live DRC] setup_menu error: {e}")
+            print(f"[LiveDRC] setup_menu error: {e}")
             traceback.print_exc()
             return False
 
@@ -137,11 +137,11 @@ class LiveDRC:
     def janela_ativo(self):
         """Abre a janela de info onde o usuario confirma o caminho do drc e escolhe o modo de execução."""
         dlg = pya.QDialog(pya.Application.instance().main_window())
-        dlg.setWindowTitle("Live DRC")
+        dlg.setWindowTitle("LiveDRC")
         lay = pya.QVBoxLayout(dlg)
 
         lay.addWidget(pya.QLabel(
-            "Live DRC enabled.\n\n"
+            "LiveDRC enabled.\n\n"
             "Save the layout to run DRC automatically.\n\n"
             f"Script: {self.run_drc_script}",
             dlg,
@@ -174,7 +174,7 @@ class LiveDRC:
             self.run_drc_script = self.find_run_drc_script()
             if not self.run_drc_script:
                 pya.MessageBox.warning(
-                    "Live DRC",
+                    "LiveDRC",
                     "IHP SG13G2 PDK run_drc.py script not found.\n\n"
                     "Check that the PDK is installed and that PDKPATH\n"
                     "or KLAYOUT_PATH are set correctly.\n\n"
@@ -190,7 +190,7 @@ class LiveDRC:
             self.save_timer.start(_SAVE_CHECK_INTERVAL_MS)
             
 
-            print(f"[Live DRC] Enabled - using: {self.run_drc_script}")
+            print(f"[LiveDRC] Enabled - using: {self.run_drc_script}")
             modo = self.janela_ativo()
 
             if modo == "deep":
@@ -198,20 +198,20 @@ class LiveDRC:
             else:
                 _DEFAULT_OPTIONS["run_mode"] = "flat"
             # pya.MessageBox.info(
-            #     "Live DRC",
-            #     "Live DRC ativo.\n\n"
+            #     "LiveDRC",
+            #     "LiveDRC ativo.\n\n"
             #     "Salva o layout para disparar o DRC automaticamente.\n\n"
             #     f"Script: {self.run_drc_script}",
             #     pya.MessageBox.Ok,
             # )
 
             if self.action:
-                self.action.title = f"Live DRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
+                self.action.title = f"LiveDRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
                 self.action.icon = _ICON_ON #ligado = verde
             return True
 
         except Exception as e:
-            print(f"[Live DRC] Error enabling: {e}")
+            print(f"[LiveDRC] Error enabling: {e}")
             self.ativo = False
             if self.action:
                 self.action.icon = _ICON_OFF # falhou ao ligar, volta para laranja
@@ -227,15 +227,15 @@ class LiveDRC:
             self._kill_drc_process()
 
             if self.action:
-                self.action.title = "Live DRC"
+                self.action.title = "LiveDRC"
                 self.action.icon = _ICON_OFF # desligado = laranja
 
-            print("[Live DRC] Disabled")
-            pya.MessageBox.info("Live DRC", "Live DRC disabled.", pya.MessageBox.Ok)
+            print("[LiveDRC] Disabled")
+            pya.MessageBox.info("LiveDRC", "LiveDRC disabled.", pya.MessageBox.Ok)
             return True
 
         except Exception as e:
-            print(f"[Live DRC] Error disabling: {e}")
+            print(f"[LiveDRC] Error disabling: {e}")
             return False
 
     # =================== DESCOBERTA DE CAMINHOS ===================
@@ -272,11 +272,11 @@ class LiveDRC:
 
         for c in candidates:
             if os.path.isfile(c):
-                print(f"[Live DRC] run_drc.py found: {c}")
+                print(f"[LiveDRC] run_drc.py found: {c}")
                 return c
 
         # Log dos caminhos tentados para debug
-        print("[Live DRC] run_drc.py NOT found. Paths checked:")
+        print("[LiveDRC] run_drc.py NOT found. Paths checked:")
         for c in candidates:
             print(f"  - {c}")
 
@@ -299,7 +299,7 @@ class LiveDRC:
         )
 
         if not os.path.exists(yaml_path):
-            print(f"[Live DRC] YAML not found: {yaml_path} (using defaults)")
+            print(f"[LiveDRC] YAML not found: {yaml_path} (using defaults)")
             return options
 
         try:
@@ -309,12 +309,12 @@ class LiveDRC:
                 user_opts = yaml.safe_load(f) or {}
 
             options.update(user_opts)
-            print(f"[Live DRC] Options loaded from {yaml_path}")
+            print(f"[LiveDRC] Options loaded from {yaml_path}")
 
         except ImportError:
-            print("[Live DRC] PyYAML not installed - using defaults")
+            print("[LiveDRC] PyYAML not installed - using defaults")
         except Exception as e:
-            print(f"[Live DRC] Error reading YAML: {e} - using defaults")
+            print(f"[LiveDRC] Error reading YAML: {e} - using defaults")
 
         return options
 
@@ -346,14 +346,14 @@ class LiveDRC:
 
             if self.last_filename != filename or self.last_modified_time != mtime:
                 if self.last_filename is not None:
-                    print(f"[Live DRC] Save detected: {os.path.basename(filename)}")
+                    print(f"[LiveDRC] Save detected: {os.path.basename(filename)}")
                     self.executar_drc()
 
                 self.last_filename = filename
                 self.last_modified_time = mtime
 
         except Exception as e:
-            print(f"[Live DRC] check_changes error: {e}")
+            print(f"[LiveDRC] check_changes error: {e}")
 
     # =================== EXECUÇÃO DO DRC ===================
 
@@ -361,7 +361,7 @@ class LiveDRC:
         """Executa o DRC chamando run_drc.py diretamente via subprocess."""
         # Proteção contra execuções simultâneas
         if self.drc_running:
-            print("[Live DRC] DRC already running - ignoring new save")
+            print("[LiveDRC] DRC already running - ignoring new save")
             return False
 
         try:
@@ -373,11 +373,11 @@ class LiveDRC:
             topcell = cv.cell_name
 
             if not filename:
-                print("[Live DRC] No file open")
+                print("[LiveDRC] No file open")
                 return False
 
             if not self.run_drc_script:
-                print("[Live DRC] run_drc.py not configured")
+                print("[LiveDRC] run_drc.py not configured")
                 return False
 
             # Carregar opções
@@ -402,7 +402,7 @@ class LiveDRC:
                 try:
                     shutil.rmtree(self.current_run_dir)
                 except Exception as e:
-                    print(f"[Live DRC] Warning: could not clean {self.current_run_dir}: {e}")
+                    print(f"[LiveDRC] Warning: could not clean {self.current_run_dir}: {e}")
 
             # Construir o comando (mesmo formato do sg13g2_drc.lym)
             cmd = [
@@ -426,12 +426,12 @@ class LiveDRC:
             if table and table != "all":
                 cmd.append(f"--table={table}")
 
-            print(f"[Live DRC] Running DRC...")
-            print(f"[Live DRC] Command: {' '.join(cmd)}")
+            print(f"[LiveDRC] Running DRC...")
+            print(f"[LiveDRC] Command: {' '.join(cmd)}")
 
             # Feedback visual
             if self.action:
-                self.action.title = "Live DRC [RUNNING...]"
+                self.action.title = "LiveDRC [RUNNING...]"
 
             # Executar em background.
             # IMPORTANTE: usar DEVNULL para stdout/stderr.
@@ -448,15 +448,15 @@ class LiveDRC:
             # Iniciar timer de monitoramento
             self.monitor_timer.start(_DRC_MONITOR_INTERVAL_MS)
 
-            print(f"[Live DRC] DRC started (PID={self.drc_process.pid})")
+            print(f"[LiveDRC] DRC started (PID={self.drc_process.pid})")
             return True
 
         except Exception as e:
-            print(f"[Live DRC] executar_drc error: {e}")
+            print(f"[LiveDRC] executar_drc error: {e}")
             traceback.print_exc()
             self.drc_running = False
             if self.action and self.ativo:
-                self.action.title = f"Live DRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
+                self.action.title = f"LiveDRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
 
             return False
 
@@ -486,22 +486,22 @@ class LiveDRC:
             # Outros códigos indicam erro fatal (ex: arquivo não encontrado).
             if retcode in (0, 1):
                 if retcode == 0:
-                    print("[Live DRC] DRC finished: no violations ✅")
+                    print("[LiveDRC] DRC finished: no violations ✅")
                 else:
-                    print("[Live DRC] DRC finished: violations found ❌ (see markers)")
+                    print("[LiveDRC] DRC finished: violations found ❌ (see markers)")
                 self.load_drc_results()
             else:
-                print(f"[Live DRC] DRC failed with a fatal error (code={retcode})")
+                print(f"[LiveDRC] DRC failed with a fatal error (code={retcode})")
                 log_path = self._find_log_file()
                 if log_path:
-                    print(f"[Live DRC] See the log at: {log_path}")
+                    print(f"[LiveDRC] See the log at: {log_path}")
 
             # Reset estado
             self.drc_process = None
             self.drc_running = False
 
             if self.action and self.ativo:
-                self.action.title = f"Live DRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
+                self.action.title = f"LiveDRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
 
 
     # =================== RESULTADOS DO DRC ===================
@@ -509,14 +509,14 @@ class LiveDRC:
     def load_drc_results(self):
         """Carrega o arquivo .lyrdb gerado pelo DRC na view atual do KLayout."""
         if not self.current_run_dir:
-            print("[Live DRC] run_dir not set")
+            print("[LiveDRC] run_dir not set")
             return
 
         pattern = os.path.join(self.current_run_dir, "*.lyrdb")
         lyrdb_files = glob.glob(pattern)
 
         if not lyrdb_files:
-            print(f"[Live DRC] No .lyrdb result in: {self.current_run_dir}")
+            print(f"[LiveDRC] No .lyrdb result in: {self.current_run_dir}")
             return
 
         # Usar o primeiro arquivo encontrado (ou o _full se existir)
@@ -533,12 +533,12 @@ class LiveDRC:
                 rdb_index = view.add_rdb(rdb)
                 cv_index = view.active_cellview_index
                 view.show_rdb(rdb_index, cv_index)
-                print(f"[Live DRC] Results loaded: {os.path.basename(result_file)}")
+                print(f"[LiveDRC] Results loaded: {os.path.basename(result_file)}")
             else:
-                print("[Live DRC] Warning: no active view to show results")
+                print("[LiveDRC] Warning: no active view to show results")
 
         except Exception as e:
-            print(f"[Live DRC] Error loading results: {e}")
+            print(f"[LiveDRC] Error loading results: {e}")
 
     # =================== UTILITÁRIOS ===================
 
@@ -548,12 +548,12 @@ class LiveDRC:
             try:
                 self.drc_process.terminate()
                 self.drc_process.wait(timeout=5)
-                print(f"[Live DRC] DRC process terminated")
+                print(f"[LiveDRC] DRC process terminated")
             except subprocess.TimeoutExpired:
                 self.drc_process.kill()
-                print(f"[Live DRC] DRC process forced to stop")
+                print(f"[LiveDRC] DRC process forced to stop")
             except Exception as e:
-                print(f"[Live DRC] Error killing process: {e}")
+                print(f"[LiveDRC] Error killing process: {e}")
             finally:
                 self.drc_process = None
                 self.drc_running = False
@@ -569,7 +569,7 @@ class LiveDRC:
     def _reset_titulo(self):
         """Reseta o título do botão para o estado ativo."""
         if self.action and self.ativo:
-            self.action.title = f"Live DRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
+            self.action.title = f"LiveDRC [ON][{_DEFAULT_OPTIONS['run_mode'][0]}]"
 
 
 
@@ -582,9 +582,9 @@ def register_plugin():
     try:
         if _live_drc_instance is None:
             _live_drc_instance = LiveDRC()
-            print("[Live DRC] Plugin registered")
+            print("[LiveDRC] Plugin registered")
     except Exception as e:
-        print(f"[Live DRC] Registration error: {e}")
+        print(f"[LiveDRC] Registration error: {e}")
         traceback.print_exc()
 
 

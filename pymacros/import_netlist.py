@@ -876,7 +876,7 @@ def abrir_janela_import():
 
 
 def plugin_import_netlist():
-    """Cria o botao "Import Netlist" na toolbar, no mesmo padrao do LivePEX e do Live DRC."""
+    """Cria o botao "Import Netlist" na toolbar, no mesmo padrao do LivePEX e do LiveDRC."""
     mw = pya.Application.instance().main_window()
     if mw is None:
         return

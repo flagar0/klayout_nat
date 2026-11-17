@@ -1,44 +1,285 @@
 <html>
+<head>
+<meta charset="utf-8">
+<title>N.A.T - Netlist Aware Toolkit</title>
+</head>
 <body>
 
-<h1>Your new Package</h1>
+<h1>N.A.T</h1>
+<h2>Netlist Aware Toolkit</h2>
 
 <p>
-Your new package is there! You can edit the package properties in the package manager. 
-Use the edit button in the upper right corner of the package details panel to
-open the package editor.
+klayout-NAT adds four layout tools to KLayout. Three of them are toolbar buttons; the fourth, Ratsnest,
+works automatically when you select an imported device. LivePEX works with the IHP SG13G2 and the
+sky130A PDKs; the other tools are for IHP SG13G2.
 </p>
 
 <p>
-Here is what you should do:
+klayout-NAT was made to run inside the
+<a href="https://github.com/iic-jku/IIC-OSIC-TOOLS">IIC-OSIC-TOOLS</a> container, which already provides
+KLayout, the IHP SG13G2 PDK, Magic, xschem and klayout-pex. Outside the container it works if the same
+tools are installed and the environment variables below point to them.
 </p>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Tool</th><th>Toolbar button</th><th>What it does</th></tr>
+  <tr><td><a href="#livedrc">LiveDRC</a></td><td>LiveDRC</td>
+      <td>Runs the PDK DRC every time the layout is saved and loads the result into the Marker Browser.</td></tr>
+  <tr><td><a href="#livepex">LivePEX</a></td><td>LivePEX</td>
+      <td>Runs a Magic parasitic extraction (CC, RC or R) of the current layout and shows the extracted netlist.</td></tr>
+  <tr><td><a href="#importnetlist">Import Netlist</a></td><td>Import Netlist</td>
+      <td>Places an xschem SPICE netlist as SG13G2 PCells, optionally at the schematic positions, and updates
+          w/l of placed devices from a new netlist.</td></tr>
+  <tr><td><a href="#ratsnest">Ratsnest</a></td><td>(none)</td>
+      <td>Draws lines from the selected device or pin to every device and pin that shares a net with it.</td></tr>
+</table>
+
+<h2>Requirements</h2>
 
 <ul>
-  <li>Enter your author details</li>
-  <li>Choose a license model</li>
-  <li>Provide an icon and optionally a screenshot image</li>
-  <li>Specify dependencies if you plan to use items from other packages</li>
+  <li>KLayout 0.29 or later with Python 3.9 or later.</li>
+  <li>The IHP SG13G2 PDK, with its KLayout technology loaded (layouts must use the <code>sg13g2</code> technology).</li>
+  <li>LiveDRC: the PDK's <code>run_drc.py</code> and a <code>python3</code> on the <code>PATH</code>.</li>
+  <li>LivePEX: Magic, the PDK's <code>.magicrc</code> and the <code>klayout-pex</code> Python package
+      (tested with version 0.3.12) available to KLayout's Python.</li>
+  <li>Import Netlist: KLayout in editing mode (start it with <code>klayout -e</code> or set
+      <i>File &gt; Setup &gt; Application &gt; Editing Mode</i>). The device names and nets are stored as
+      user properties, and KLayout only allows that in editing mode.</li>
 </ul>
 
 <p>
-The Python library is a standalone, native library. It can be used through "import"
-from other Python code. It is not embedded into KLayout's macro framework, so you 
-have to edit it with your favorite text editor. Python will look for files in the
-"python" subfolder of the package.
+All of this is already installed in IIC-OSIC-TOOLS, the environment klayout-NAT was made for. There the
+PDK paths (<code>/foss/pdks/...</code>) are found without any setup.
+</p>
+
+<h2>Installation</h2>
+
+<ul>
+  <li><b>Package manager:</b> <i>Tools &gt; Manage Packages</i>, select the package and click <i>Apply</i>.</li>
+  <li><b>By hand:</b> copy the <code>PluginNat</code> folder into the <code>salt</code> folder of your
+      KLayout home (<code>~/.klayout/salt/</code> on Linux; <code>/headless/.klayout/salt/</code> in
+      IIC-OSIC-TOOLS) and restart KLayout.</li>
+</ul>
+
+<p>
+After a restart the buttons <b>LiveDRC</b>, <b>LivePEX</b> and <b>Import Netlist</b> appear at the end of the
+toolbar. Messages from all tools are printed to the macro console (<i>Macros &gt; Macro Development</i>, or F5).
+</p>
+
+<!-- ============================================================ -->
+<h2><a name="livedrc">LiveDRC</a></h2>
+
+<p>Demo video: <a href="gifs/live_drc.mp4">LiveDRC running on save</a>.</p>
+
+<h3>Usage</h3>
+<ol>
+  <li>Open a saved layout (.gds or .oas).</li>
+  <li>Click <b>LiveDRC</b>. The plugin looks for <code>run_drc.py</code> and asks for the DRC mode,
+      <b>deep</b> (default) or <b>flat</b>. The button turns green and shows <code>[ON][d]</code> or
+      <code>[ON][f]</code>.</li>
+  <li>Save the layout (Ctrl+S). The plugin notices the new file time within about 2 seconds and starts the DRC
+      in the background. The button shows <code>[RUNNING...]</code>.</li>
+  <li>When the DRC finishes, its report is loaded into the Marker Browser of the current view.</li>
+  <li>Click <b>LiveDRC</b> again to turn it off. A DRC that is still running is stopped.</li>
+</ol>
+
+<p>Saves made while a DRC is running are ignored.</p>
+
+<h3>Where <code>run_drc.py</code> is looked for</h3>
+<ol>
+  <li><code>$PDKPATH/libs.tech/klayout/tech/drc/run_drc.py</code></li>
+  <li><code>drc/run_drc.py</code> or <code>tech/drc/run_drc.py</code> under each folder in <code>$KLAYOUT_PATH</code></li>
+  <li><code>/foss/pdks/ihp-sg13g2/libs.tech/klayout/tech/drc/run_drc.py</code></li>
+</ol>
+
+<h3>Options</h3>
+<p>
+The plugin reads the same options file as the PDK's DRC menu,
+<code>~/.ihp_pdk/ihp_sg13g2_drc_options.yml</code>. The run mode always comes from the dialog. Without the
+file these defaults are used:
+</p>
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>top_cell</code></td><td>(current cell)</td><td>Cell to check.</td></tr>
+  <tr><td><code>run_dir</code></td><td><code>drc_run_&lt;topcell&gt;</code> next to the layout</td>
+      <td>Output folder. <b>It is deleted and recreated on every run.</b></td></tr>
+  <tr><td><code>parallel_runs</code></td><td>1</td><td>Passed as <code>--mp</code>.</td></tr>
+  <tr><td><code>density_thr</code></td><td>1</td><td>Passed as <code>--density_thr</code>.</td></tr>
+  <tr><td><code>table</code></td><td>all</td><td>Rule table; anything other than <code>all</code> is passed as <code>--table</code>.</td></tr>
+  <tr><td><code>no_density</code></td><td>true</td><td>Density checks are off unless you set this to false.</td></tr>
+  <tr><td><code>no_feol</code>, <code>no_beol</code>, <code>disable_extra_rules</code>, <code>density_only</code>,
+          <code>density_sanity</code>, <code>antenna</code>, <code>antenna_only</code>, <code>no_offgrid</code>,
+          <code>no_angle</code>, <code>no_recommended</code></td>
+      <td>false</td><td>Passed to <code>run_drc.py</code> as <code>--&lt;flag&gt;</code> when true.</td></tr>
+</table>
+
+<p>
+If several reports are produced, the <code>*_full.lyrdb</code> one is loaded.
+</p>
+
+<!-- ============================================================ -->
+<h2><a name="livepex">LivePEX</a></h2>
+
+<p><img src="gifs/livepex.gif" alt="LivePEX panel"></p>
+
+<h3>Usage</h3>
+<ol>
+  <li>Save the layout and make the cell to extract the current cell.</li>
+  <li>Click <b>LivePEX</b> to open the panel.</li>
+  <li>Choose the <b>PEX mode</b>: <b>CC</b> (capacitance, default), <b>RC</b> (capacitance and resistance)
+      or <b>R</b> (resistance).</li>
+  <li>Click <b>Magic</b>. When Magic finishes, the extracted netlist is shown in the panel.</li>
+</ol>
+
+<h3>PDKs</h3>
+<p>
+LivePEX works with IHP SG13G2 and sky130A. The PDK is taken from the <code>PDK</code> environment
+variable; select the PDK before starting KLayout (in IIC-OSIC-TOOLS: <code>sak-pdk sky130A</code> or
+<code>sak-pdk ihp-sg13g2</code>).
+</p>
+
+<h3>Output</h3>
+<p>Everything goes to <code>pex_magic_&lt;topcell&gt;</code> next to the layout:</p>
+<ul>
+  <li><code>&lt;topcell&gt;.pex.spice</code>: the extracted netlist;</li>
+  <li><code>&lt;topcell&gt;_magic_script.tcl</code>: the Magic script that was run;</li>
+  <li><code>&lt;topcell&gt;_magic_output.txt</code>: the Magic log.</li>
+</ul>
+
+<h3>Environment variables</h3>
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Variable</th><th>Use</th></tr>
+  <tr><td><code>KPEX_MAGICRC</code></td><td>Path to the <code>.magicrc</code>. Checked first.</td></tr>
+  <tr><td><code>PDK_ROOT</code>, <code>PDK</code></td>
+      <td>Used to find <code>$PDK_ROOT/$PDK/libs.tech/magic/$PDK.magicrc</code>. Without them,
+          <code>/foss/pdks/ihp-sg13g2/libs.tech/magic/ihp-sg13g2.magicrc</code> and then
+          <code>/foss/pdks/sky130A/libs.tech/magic/sky130A.magicrc</code> are tried.</td></tr>
+  <tr><td><code>KPEX_MAGIC_EXE</code></td><td>Magic executable. Default: <code>magic</code>.</td></tr>
+</table>
+
+<p>
+The 2.5D (klayout-pex) and FasterCap engines are present in the code but turned off, because the
+<code>klayout-pex</code> version in the container does not include them.
+</p>
+
+<!-- ============================================================ -->
+<h2><a name="importnetlist">Import Netlist</a></h2>
+
+<p>Demo video: <a href="gifs/import_netlist.mp4">Import Netlist with xschem placement</a>.</p>
+
+<p>
+Only for the IHP SG13G2 PDK. Open or create a layout with the <code>sg13g2</code> technology first, with
+KLayout in editing mode. Then click <b>Import Netlist</b> and choose one of two options.
+</p>
+
+<h3>Import new netlist</h3>
+<ul>
+  <li><b>SPICE netlist</b> (required): the netlist written by xschem.</li>
+  <li><b>Xschem location</b> (optional): the xschem schematic (<code>.sch</code>). With it, the devices and
+      pins are moved to the same relative positions they have in the schematic.</li>
+</ul>
+
+<p>What the import creates:</p>
+<ul>
+  <li>Each device becomes a cell named after its SPICE instance (<code>XM1</code>, <code>XC2</code>, ...)
+      that contains the PCell. Open the cell one level down to edit the PCell parameters. With
+      <code>m&gt;1</code> the copies are named <code>XM1_1</code>, <code>XM1_2</code>, ...</li>
+  <li>Pins declared in the netlist with <code>*.ipin</code>, <code>*.opin</code> and <code>*.iopin</code>
+      become 1 &micro;m squares on Metal1 (8/0 and 8/2) with a label on 8/25, in a row 10 &micro;m below
+      the devices.</li>
+  <li>The device instances and pin shapes carry these user properties, which are kept when the layout is
+      saved as GDS:
+    <table border="1" cellpadding="4" cellspacing="0">
+      <tr><th>Key</th><th>On</th><th>Value</th></tr>
+      <tr><td>1</td><td>devices and pins</td><td>SPICE instance name or pin name</td></tr>
+      <tr><td>2</td><td>devices</td><td>nets of the device terminals, in SPICE order, separated by spaces</td></tr>
+      <tr><td>3</td><td>pins</td><td><code>ipin</code>, <code>opin</code> or <code>iopin</code></td></tr>
+    </table>
+  </li>
+</ul>
+
+<p>Placement from the schematic:</p>
+<ul>
+  <li>Positions are scaled from the schematic so that devices do not overlap. The leftmost/topmost
+      imported device goes to (0, 0), and the y axis is flipped (it grows downwards in xschem).</li>
+  <li>Rotation and mirroring from the schematic are not applied.</li>
+  <li>Devices that are not found in the schematic are placed in a row below the others, and their names
+      are printed to the console.</li>
+</ul>
+
+<h3>Update netlist</h3>
+<p>
+Use it after changing device sizes in the schematic. Choose the new <b>SPICE netlist</b>. The plugin matches
+the layout devices to the netlist by name, lists every device whose <code>w</code> or <code>l</code> changed
+and, after <b>Apply changes</b>, updates those PCells. The whole update is one step that Ctrl+Z undoes.
+Devices that exist only in the layout or only in the netlist are not created or deleted; they are listed in
+the console.
+</p>
+
+<h3>Supported devices</h3>
+<p>
+The PCell templates in <code>pymacros/ihp130_pcell_templates.py</code> cover the SG13G2 LV/HV MOS and RF MOS,
+npn13G2/npn13G2L/npn13G2V and pnpMPA bipolars, cmim and rfcmim capacitors, rsil/rppd/rhigh resistors, antenna
+and Schottky diodes, SVaricap, ESD devices, ntap1/ptap1, isolbox and bondpad. Lines that match no template
+are treated as subcircuit instances.
+</p>
+
+<!-- ============================================================ -->
+<h2><a name="ratsnest">Ratsnest</a></h2>
+
+<p><img src="gifs/ratsnest.gif" alt="Ratsnest lines"></p>
+
+<p>
+Select an imported device (its cell or the PCell inside it) or a pin. Lines are drawn from it to every
+device and pin that shares a net with it. They follow the selection when it is moved and disappear when
+nothing is selected. Nothing needs to be turned on.
+</p>
+
+<ul>
+  <li>The lines use the nets stored by Import Netlist (property keys 1 and 2), so they only work on
+      layouts imported with this plugin.</li>
+  <li><code>GND</code> and <code>sub!</code> are ignored, because they connect almost everything. Edit
+      <code>IGNORED_NETS</code> in <code>pymacros/ratsnest.py</code> to change this.</li>
+  <li>The lines are drawn as rulers, so <i>Clear All Rulers And Annotations</i> also removes them.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>Package contents</h2>
+
+<table border="1" cellpadding="4" cellspacing="0">
+  <tr><th>Path</th><th>Contents</th></tr>
+  <tr><td><code>grain.xml</code></td><td>Package description for the KLayout package manager.</td></tr>
+  <tr><td><code>pymacros/autorun.lym</code></td><td>Runs at startup and registers all tools.</td></tr>
+  <tr><td><code>pymacros/live_drc.py</code></td><td>LiveDRC.</td></tr>
+  <tr><td><code>pymacros/live_pex.py</code></td><td>LivePEX panel.</td></tr>
+  <tr><td><code>pymacros/import_netlist.py</code></td><td>Import Netlist window, importer and update.</td></tr>
+  <tr><td><code>pymacros/ihp130_pcell_templates.py</code></td><td>SPICE to PCell templates for SG13G2.</td></tr>
+  <tr><td><code>pymacros/ratsnest.py</code></td><td>Ratsnest.</td></tr>
+  <tr><td><code>pymacros/debug_test.lym</code></td><td>Diagnostic macro (<i>Tools</i> menu) that prints the plugin state.</td></tr>
+  <tr><td><code>icons/</code></td><td>Toolbar icons.</td></tr>
+  <tr><td><code>doc/</code></td><td>This page and the demo animations.</td></tr>
+</table>
+
+<h2>License and credits</h2>
+
+<p>
+klayout-NAT is licensed under the GNU General Public License v3.0 or later. <code>import_netlist.py</code> and
+<code>ihp130_pcell_templates.py</code> are based on the netlist importer of the IHP Open PDK
+(Apache License 2.0, originally by Efabless Corporation); their original notices are kept in the files.
+LivePEX uses <a href="https://github.com/iic-jku/klayout-pex">klayout-pex</a> (GPL-3.0-or-later) and Magic.
 </p>
 
 <p>
-In the package details you will find the local path to your package
-data under "Installation". You can use any versioning system to manage your
-files there. 
+This toolkit is my undergraduate final project (Trabalho de Conclus&atilde;o de Curso) in Electronic
+Engineering at the Universidade de S&atilde;o Paulo (USP).
 </p>
 
 <p>
-Once you have finished your package, don't forget to specify the package version
-so users of you package will be informed of updates. Finally you can publish the
-package files to a place of your choice and submit the download URL to the 
-Salt Mine server.
+Thanks to the LSI, Laborat&oacute;rio de Sistemas Integr&aacute;veis of the Escola Polit&eacute;cnica da USP,
+for the support.
 </p>
+
+<p>Author: Flavio Midea.</p>
 
 </body>
 </html>

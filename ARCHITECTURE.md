@@ -1,330 +1,54 @@
-# 🏗️ Arquitetura - Live DRC Plugin
+# klayout-NAT architecture
 
-## 📐 Visão Geral
+User documentation: [doc/readme.html](doc/readme.html). This file is for whoever changes the code.
 
-```
-┌─────────────────────────────────────────┐
-│          KLayout Application            │
-│  ┌───────────────────────────────────┐  │
-│  │      Main Window / Menu           │  │
-│  │  ┌─────────────────────────────┐  │  │
-│  │  │  Tools > Live DRC 👁️       │  │  │
-│  │  └─────────────────────────────┘  │  │
-│  └───────────────────────────────────┘  │
-│                  ↓                      │
-│  ┌───────────────────────────────────┐  │
-│  │      LiveDRC Plugin Class         │  │
-│  │  ┌─────────────────────────────┐  │  │
-│  │  │  • setup_menu()             │  │  │
-│  │  │  • toggle_live_drc()        │  │  │
-│  │  │  • ativar_live_drc()        │  │  │
-│  │  │  • desativar_live_drc()     │  │  │
-│  │  │  • on_view_changed()        │  │  │
-│  │  │  • executar_drc()           │  │  │
-│  │  └─────────────────────────────┘  │  │
-│  └───────────────────────────────────┘  │
-│                  ↓                      │
-│  ┌───────────────────────────────────┐  │
-│  │    Layout View / Cellview         │  │
-│  │  ┌─────────────────────────────┐  │  │
-│  │  │  • active_cellview()        │  │  │
-│  │  │  • layout()                 │  │  │
-│  │  │  • cell()                   │  │  │
-│  │  │  • add_marker()             │  │  │
-│  │  └─────────────────────────────┘  │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-                  ↓
-┌─────────────────────────────────────────┐
-│        DRC Engine (KLayout)             │
-│  ┌───────────────────────────────────┐  │
-│  │  • Carrega script DRC             │  │
-│  │  • Executa regras                 │  │
-│  │  • Gera relatório                 │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-                  ↓
-┌─────────────────────────────────────────┐
-│        PDK DRC File                     │
-│  ihp-sg13g2.drc                         │
-└─────────────────────────────────────────┘
-```
+## Startup
 
-## 🔧 Componentes Principais
+KLayout runs every macro in a package's `pymacros/` folder that is marked as autorun. Here that is
+`pymacros/autorun.lym`, which:
 
-### 1. LiveDRC Class (`live_drc.py`)
+1. adds `pymacros/` to `sys.path`;
+2. calls `live_drc.register_plugin()`, `live_pex.plugin_pex()` and `ratsnest.register_ratsnest()`;
+3. loads `import_netlist.py` by file path (`importlib.util.spec_from_file_location`) and calls
+   `plugin_import_netlist()`. A plain `import import_netlist` could pick up the PDK's own
+   `import_netlist` package, which is also on `sys.path`.
 
-**Responsabilidade**: Gerenciar todo o ciclo de vida do plugin
+Each `register`/`plugin` function adds one `pya.Action` at `@toolbar.end`, except Ratsnest, which only
+hooks into the views.
 
-**Estados**:
-```python
-self.ativo = "False"          # Status do Live DRC ("True"/"False")
-self.ultima_analise = None    # Timestamp da última análise
-self.main_window = None       # Referência à janela principal
-self.action = None            # Action do menu
-```
+## Modules
 
-**Métodos Públicos**:
-- `setup_menu()`: Cria botão no menu Tools
-- `toggle_live_drc()`: Liga/desliga o modo Live DRC
-- `ativar_live_drc()`: Ativa o monitoramento
-- `desativar_live_drc()`: Desativa o monitoramento
+| Module | Entry point | Main pieces |
+|---|---|---|
+| `live_drc.py` | `register_plugin()` | `LiveDRC`: toolbar action, a 2 s timer that compares the file time of the active cellview, `run_drc.py` started with `subprocess.Popen`, a 500 ms timer that waits for it and loads the `.lyrdb` |
+| `live_pex.py` | `plugin_pex()` | `PluginLivePex` (`QDialog`): `pex_magic()` uses `klayout_pex.magic.magic_runner` to write the Tcl script and run Magic; `pex_25d()` and `run_lvs()` are kept but the button is disabled |
+| `import_netlist.py` | `plugin_import_netlist()` | `JanelaImportNetlist` (window); `importar()` parses the netlist (`ler_netlist`), creates the PCells and pins (`instanciar`) and optionally moves them (`posicionar_pelo_xschem`); `atualizar()` compares w/l (`comparar_netlist`) and changes the PCells inside one undo transaction |
+| `ihp130_pcell_templates.py` | `templates` | one regex per SPICE device model, mapped to an SG13G2 PCell and its parameters |
+| `ratsnest.py` | `register_ratsnest()` | `on_selection_changed` on every view plus a 300 ms timer that redraws when the selection moves; lines are `pya.Annotation` rulers in their own category |
 
-**Métodos Privados**:
-- `on_view_changed()`: Callback quando view muda (save)
-- `executar_drc()`: Executa análise DRC no layout
+## Data shared between modules
 
-### 2. Inicialização (`__init__.py`)
+Import Netlist writes, and Ratsnest reads, user properties with integer keys (GDS drops string keys):
 
-**Responsabilidade**: Auto-carregar o plugin quando KLayout inicia
+| Key | Stored on | Value |
+|---|---|---|
+| 1 | device cell instance, Metal1 pin shape (8/2) | SPICE instance name or pin name |
+| 2 | device cell instance | terminal nets in SPICE order, separated by spaces |
+| 3 | Metal1 pin shape | `ipin`, `opin` or `iopin` |
 
-```python
-from . import live_drc  # Import do módulo principal
-```
+The device cell is named after the SPICE instance and contains a single PCell instance with its
+lower-left corner at the origin. Update Netlist relies on that layout of the cell.
 
-### 3. Registro Global
+## External programs and files
 
-**Responsabilidade**: Criar instância singleton do plugin
+| Tool | Uses | Writes |
+|---|---|---|
+| LiveDRC | `python3 run_drc.py` from the PDK, `~/.ihp_pdk/ihp_sg13g2_drc_options.yml` | `drc_run_<topcell>/` next to the layout (recreated on each run) |
+| LivePEX | `klayout-pex` Python package, `magic`, PDK `.magicrc` | `pex_magic_<topcell>/` next to the layout |
+| Import Netlist | xschem `.spice` and, optionally, `.sch` | only the open layout |
 
-```python
-_live_drc_instance = None
+## Packaging
 
-def register_plugin():
-    global _live_drc_instance
-    if _live_drc_instance is None:
-        _live_drc_instance = LiveDRC()
-
-# Auto-register
-register_plugin()
-```
-
-## 🔄 Fluxo de Execução
-
-### Inicialização
-
-```
-1. KLayout inicia
-   ↓
-2. Carrega módulos Python da pasta salt/
-   ↓
-3. Executa __init__.py
-   ↓
-4. Import live_drc.py
-   ↓
-5. register_plugin() cria instância LiveDRC
-   ↓
-6. LiveDRC.__init__() chama setup_menu()
-   ↓
-7. Menu item "Live DRC 👁️" aparece em Tools
-```
-
-### Ativação do Live DRC
-
-```
-1. Usuário clica "Tools > Live DRC 👁️"
-   ↓
-2. toggle_live_drc() verifica self.ativo
-   ↓
-3. Se "False": chama ativar_live_drc()
-   ↓
-4. Valida se DRC_FILE existe
-   ↓
-5. Conecta callback: app.on_view_changed(self.on_view_changed)
-   ↓
-6. Atualiza menu: "Live DRC ✅ (Ativo)"
-   ↓
-7. Mostra popup de confirmação
-```
-
-### Análise DRC (ao salvar)
-
-```
-1. Usuário salva layout (Ctrl+S)
-   ↓
-2. KLayout dispara evento view_changed
-   ↓
-3. on_view_changed() verifica se ativo == "True"
-   ↓
-4. Delay de 0.5s (garantir que salvou)
-   ↓
-5. Chama executar_drc(view)
-   ↓
-6. Pega cellview ativo
-   ↓
-7. Limpa markers anteriores
-   ↓
-8. Carrega arquivo DRC do PDK
-   ↓
-9. Cria DRC Engine
-   ↓
-10. Executa script DRC
-    ↓
-11. Coleta resultados (erros)
-    ↓
-12. Adiciona markers no layout
-    ↓
-13. Calcula estatísticas (tempo, num erros)
-    ↓
-14. Loga no console
-    ↓
-15. Se erros > 0: mostra popup
-```
-
-## 📦 Dependências
-
-### KLayout Python API (`pya`)
-
-**Módulos usados**:
-- `pya.Application`: Acesso à aplicação principal
-- `pya.QObject`: Base class para objetos Qt
-- `pya.Action`: Item de menu
-- `pya.MessageBox`: Popups/dialogs
-- `pya.DRC.DRCEngine`: Engine de DRC
-- `pya.ReportDatabase`: Relatórios de DRC
-
-### Python Standard Library
-
-- `os`: Manipulação de paths
-- `time`: Delays e timing
-- `datetime`: Timestamps
-
-## 🔀 Estados e Transições
-
-```
-┌─────────────┐
-│  Desativado │  (self.ativo = "False")
-│    👁️       │
-└──────┬──────┘
-       │ toggle_live_drc()
-       │ (click no botão)
-       ↓
-┌─────────────┐
-│  Validando  │  (verifica DRC_FILE)
-└──────┬──────┘
-       │ DRC_FILE OK
-       ↓
-┌─────────────┐
-│   Ativado   │  (self.ativo = "True")
-│    ✅       │  (conecta callback)
-└──────┬──────┘
-       │ on_view_changed()
-       │ (evento de save)
-       ↓
-┌─────────────┐
-│  Executando │  (rodando DRC)
-│    🔍       │
-└──────┬──────┘
-       │ DRC completo
-       ↓
-┌─────────────┐
-│  Mostrando  │  (markers + popup)
-│  Resultado  │
-│    📊       │
-└──────┬──────┘
-       │ volta para
-       ↓
-┌─────────────┐
-│   Ativado   │  (aguardando próximo save)
-│    ✅       │
-└─────────────┘
-```
-
-## 🎨 Design Patterns Utilizados
-
-### Singleton Pattern
-- Instância global `_live_drc_instance`
-- Garante único plugin ativo
-
-### Observer Pattern
-- `app.on_view_changed()` observa mudanças na view
-- Callback `on_view_changed()` reage a eventos
-
-### Command Pattern
-- `pya.Action` encapsula comando do menu
-- `on_triggered()` executa ação
-
-## 🛡️ Tratamento de Erros
-
-**Estratégia**: Catch genérico + log + continue
-
-```python
-try:
-    # logica principal
-    return True
-except BaseException as e:
-    print(f"❌ Erro: {e}")
-    return False
-```
-
-**Pontos de falha tratados**:
-1. Setup do menu
-2. Arquivo DRC não existe
-3. Cellview inválido
-4. Erro ao executar DRC
-5. Erro ao processar resultados
-
-## 📊 Performance
-
-**Otimizações**:
-- Delay de 0.5s evita múltiplas execuções
-- Verifica `self.ativo` antes de processar
-- Limpa markers anteriores antes de adicionar novos
-
-**Bottlenecks conhecidos**:
-- Execução do DRC script (depende do PDK)
-- Processamento de layouts grandes
-- Callback pode disparar múltiplas vezes
-
-**Melhorias futuras**:
-- Debounce/throttle no callback
-- DRC incremental (só área modificada)
-- Cache de resultados
-
-## 🔐 Thread Safety
-
-**Atual**: Single-threaded (roda na main thread do KLayout)
-
-**Considerações**:
-- Callbacks rodam na thread principal
-- Sem concorrência de acesso a `self.ativo`
-- DRC Engine é blocking
-
-## 📝 Logging
-
-**Formato**:
-```python
-print("✅ Mensagem de sucesso")
-print("❌ Mensagem de erro")
-print("🔍 Ação em progresso")
-print("📊 Estatísticas")
-```
-
-**Níveis** (informal):
-- ✅ = Info/Success
-- ❌ = Error
-- 🔍 = Debug/Progress
-- 📊 = Metrics
-
-## 🔄 Ciclo de Vida
-
-```
-Plugin Load → Setup Menu → Idle
-                             ↓
-                    (user clicks button)
-                             ↓
-                    Activate → Monitor
-                                 ↓
-                          (save detected)
-                                 ↓
-                    Execute DRC → Show Results
-                                 ↓
-                          Back to Monitor
-                                 ↓
-                    (user clicks button again)
-                                 ↓
-                          Deactivate → Idle
-```
-
----
-
-**Nota**: Esta arquitetura prioriza simplicidade e funcionalidade sobre complexidade desnecessária. É código funcional, não código "bonito". 😎
+`grain.xml` follows the KLayout package format: `name` identifies the package and must not change
+(a new name is a new package for KLayout), `version` must go up on every release, and `doc-url`
+points to `doc/readme.html`, relative to the package folder.
