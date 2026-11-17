@@ -1,4 +1,4 @@
-<p align="center"><img src="icons/nat.svg" width="128" alt="N.A.T icon"></p>
+<p align="center"><img src="icons/nat_sem_fundo.svg" width="128" alt="N.A.T icon"></p>
 
 # N.A.T
 
