@@ -1,4 +1,5 @@
 import glob
+import inspect
 import os
 import subprocess
 import sys
@@ -8,17 +9,24 @@ from pathlib import Path
 import pya
 
 _HERE_STR = str(Path(__file__).resolve().parent)
-_PROTOBUF = "/usr/local/lib/python3.12/dist-packages/klayout_pex_protobuf/"
 
 if _HERE_STR in sys.path:
     sys.path.remove(_HERE_STR)
 sys.path.insert(0, _HERE_STR)
 
-if str(_PROTOBUF) not in sys.path:
-    sys.path.insert(0, str(_PROTOBUF))
+# Flavio: o protobuf do klayout-pex importa "kpex.*" e precisa da propria pasta no sys.path.
+# Usa a pasta do pacote instalado; um caminho fixo misturava versoes do klayout-pex
+try:
+    import klayout_pex_protobuf
+    _PROTOBUF = os.path.dirname(os.path.realpath(klayout_pex_protobuf.__file__))
+    if _PROTOBUF not in sys.path:
+        sys.path.append(_PROTOBUF)
+except ImportError:
+    pass
 
     
-# Flavio: usa o klayout-pex nativo do container (/usr/local/lib/python3.12/dist-packages/klayout_pex, v0.3.12)
+# Flavio: usa o klayout-pex nativo do container (/usr/local/lib/python3.12/dist-packages/klayout_pex),
+# testado com v0.3.12 e v0.9.0
 # pex25d_builder/pex25d nao existem nessa versao -> pex_25d desativado
 try:
     from klayout_pex.klayout.lvsdb_extractor import KLayoutExtractionContext, GDSPair
@@ -38,6 +46,28 @@ except Exception as e:
 
 
 _janela_instancia = None
+
+
+def argumentos_aceitos(func, valores):
+    """Ajusta os argumentos de nome para a assinatura de func na versao instalada.
+
+    prepare_magic_script do klayout-pex muda entre versoes (a 0.3.12 tem
+    tolerance, a 0.9.0 tem threshold/min_res/min_delay/unique_mode). Os valores que
+    a versao instalada nao aceita sao descartados. Um parametro obrigatorio que
+    nao esta em valores (de uma versao futura) recebe o DEFAULT do seu enum, se
+    houver, ou None, que no klayout-pex significa "padrao do Magic".
+    """
+    aceitos = {}
+    for nome, p in inspect.signature(func).parameters.items():
+        if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD):
+            continue
+        if nome in valores:
+            aceitos[nome] = valores[nome]
+        elif p.default is p.empty:
+            tipo = p.annotation
+            aceitos[nome] = getattr(tipo, "DEFAULT", None) if isinstance(tipo, type) else None
+            print(f"[LivePEX] {func.__name__}: new parameter '{nome}' set to {aceitos[nome]!r}")
+    return aceitos
 
 
 _KNOWN_RUN_LVS_PATHS = [
@@ -164,7 +194,8 @@ class PluginLivePex(pya.QDialog):
             modo_pex = MagicPEXMode.R
 
         # Gera script TCL (importado do klayout-pex)
-        prepare_magic_script(
+        # Flavio: valores das duas versoes; argumentos_aceitos passa so os que a instalada aceita
+        valores_magic = dict(
             gds_path=layout_path,
             cell_name=topcell,
             run_dir_path=str(run_dir),
@@ -173,11 +204,15 @@ class PluginLivePex(pya.QDialog):
             pex_mode=modo_pex,          # CC = capacitância (padrão)
             c_threshold=0.0,
             r_threshold=0.0,
-            tolerance=1.0,              # Flavio: API nativa 0.3.12 
+            tolerance=1.0,              # klayout-pex 0.3.12
+            threshold=None,             # klayout-pex 0.9.0 (None = padrao do Magic)
+            min_res=None,
+            min_delay=None,
             halo=None,
             short_mode=MagicShortMode.NONE,
             merge_mode=MagicMergeMode.NONE,
         )
+        prepare_magic_script(**argumentos_aceitos(prepare_magic_script, valores_magic))
 
         self.label_info.setText("Running Magic PEX...")
         pya.Application.instance().process_events()

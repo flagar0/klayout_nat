@@ -89,6 +89,6 @@ Author: Flavio Midea.
 
 ## License
 
-GPL-3.0-or-later. `import_netlist.py` and `ihp130_pcell_templates.py` are based on the IHP Open PDK
+GPL-3.0-or-later, see [LICENSE](LICENSE). `import_netlist.py` and `ihp130_pcell_templates.py` are based on the IHP Open PDK
 netlist importer (Apache-2.0, originally by Efabless Corporation). LivePEX uses
 [klayout-pex](https://github.com/iic-jku/klayout-pex) and Magic.

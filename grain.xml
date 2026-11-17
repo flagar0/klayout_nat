@@ -3,7 +3,7 @@
  <name>klayout-NAT</name>
  <token/>
  <hidden>false</hidden>
- <version>1.1</version>
+ <version>1.2</version>
  <api-version>0.29; python 3.9</api-version>
  <title>Netlist Aware Toolkit - LiveDRC, LivePEX, Import Netlist and Ratsnest</title>
  <doc>Layout tools for the IHP SG13G2 open PDK: LiveDRC runs the PDK DRC every time the layout is saved; LivePEX runs a Magic parasitic extraction (CC, RC or R) from a panel; Import Netlist places an xschem SPICE netlist as SG13G2 PCells named after the SPICE instances, optionally at the schematic positions, and updates w/l from a new netlist; Ratsnest draws connection lines from the selected device or pin to the devices and pins that share a net. Made to run inside the IIC-OSIC-TOOLS container. See the documentation link for requirements and usage.</doc>

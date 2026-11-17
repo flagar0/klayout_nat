@@ -139,12 +139,12 @@ def create_pcell_instance(name_spice=None, pcell_name='CIRCLE', lib_name='Basic'
         casca = layout.create_cell(name_spice)
         casca.insert(pya.CellInstArray(pcell_var, pya.Trans(-bbox.left, -bbox.bottom)))
         # FLavio: bbox.left e bbox.bottom para que o PCell fique na origem da celula casca
-        instancia = top_cell.insert(pya.CellInstArray(casca.cell_index(), pos))
-        instancia.set_property(PROP_NAME, name_spice) # Flavio: coloca o nome do componente gerado
-        # igual o nome do SPICE
+        # Flavio: nome do SPICE e nets dos terminais (na ordem do SPICE, lidas pelo ratsnest).
+        # As propriedades vao junto no insert: set_property() so funciona no modo de edicao
+        props = [(PROP_NAME, name_spice)]
         if nets:
-            instancia.set_property(PROP_NETS, " ".join(nets)) # Flavio: nets dos terminais, na ordem do SPICE,
-            # lidas pelo ratsnest (PluginNat/pymacros/ratsnest.py)
+            props.append((PROP_NETS, " ".join(nets)))
+        top_cell.insert(pya.CellInstArray(casca.cell_index(), pos), layout.properties_id(props))
     else:
         top_cell.insert(pya.CellInstArray(pcell_var, offset))
     return (width, height)
@@ -196,12 +196,11 @@ def create_pin_instance(name, direction, x):
     size = int(round(PIN_SIZE_UM / layout.dbu))
     box = pya.Box(x0, y0, x0 + size, y0 + size)
 
+    # Flavio: propriedades no insert, sem set_property (que so funciona no modo de edicao)
+    prop_id = layout.properties_id([(PROP_NAME, name), (PROP_DIRECTION, direction)])
     top_cell.shapes(layout.layer(METAL1_DRAWING)).insert(box)
-    pin_shape = top_cell.shapes(layout.layer(METAL1_PIN)).insert(box)
+    top_cell.shapes(layout.layer(METAL1_PIN)).insert(box, prop_id)
     top_cell.shapes(layout.layer(METAL1_TEXT)).insert(pya.Text(name, pya.Trans(box.center().x, box.center().y)))
-
-    pin_shape.set_property(PROP_NAME, name)
-    pin_shape.set_property(PROP_DIRECTION, direction)
 
     # Flavio: pino em casca abaixo
     # size = int(round(PIN_SIZE_UM / layout.dbu))
@@ -366,9 +365,11 @@ def ler_netlist(netlist_path):
             match = template['regex'].match(line)
             if match:
                 any_match = True
-                # Flavio: templates com keep_strings ex: cmim mandam os parametros "string"
-                # como texto para o PCell, sem converter para float
-                keep_strings = template.get('keep_strings', False)
+                # Flavio: os parametros "string" vao como texto para o PCell, sem converter para float.
+                # No PDK do IIC-OSIC-TOOLS 2026.10, nmos e rppd saem vazios com alguns valores em float
+                # (o callback quebra com "could not convert string to float"); como texto, todos os
+                # templates funcionam. Um template pode voltar ao float com "keep_strings": False
+                keep_strings = template.get('keep_strings', True)
                 if keep_strings:
                     params = dict(template['default_params'])
                 else:
@@ -528,6 +529,36 @@ def escala_sem_sobreposicao(itens):
     return escala or 1.0
 
 
+def recriar_instancias(cell, novas):
+    """
+    Instance.transform e change_pcell_parameters so funcionam no modo de edicao.
+    Recria todas as instancias de cell, trocando as de novas ({indice em each_inst: CellInstArray}).
+    clear_insts e insert funcionam nos dois modos, e as propriedades sao mantidas.
+    """
+    todas = [(novas.get(k, inst.cell_inst), inst.prop_id) for k, inst in enumerate(cell.each_inst())]
+    cell.clear_insts()
+    for arr, prop_id in todas:
+        cell.insert(arr, prop_id)
+
+
+def recriar_shapes(cell, layer, deslocar):
+    """
+    Shape.transform so funciona no modo de edicao. Copia os shapes da camada para uma celula
+    temporaria (os de deslocar, {str(shape): pya.Trans}, ja deslocados), limpa a camada e copia de volta.
+    """
+    layout = cell.layout()
+    tmp = layout.create_cell("NAT_TMP")
+    for s in cell.shapes(layer).each():
+        t = deslocar.get(str(s))
+        if t:
+            tmp.shapes(layer).insert(s, t)
+        else:
+            tmp.shapes(layer).insert(s)
+    cell.shapes(layer).clear()
+    cell.shapes(layer).insert(tmp.shapes(layer))
+    layout.delete_cell(tmp.cell_index())
+
+
 def posicionar_pelo_xschem(sch_path):
     """
     Move as cascas dos componentes e os pinos do layout para as posicoes do .sch, proporcionalmente.
@@ -541,7 +572,7 @@ def posicionar_pelo_xschem(sch_path):
     # cascas dos componentes: casam pelo nome; copias de m>1 (XM5_1, XM5_2) usam a posicao do original
     cascas = []
     sem_posicao = []
-    for inst in top_cell.each_inst():
+    for k, inst in enumerate(top_cell.each_inst()):  # Flavio: k = indice usado por recriar_instancias
         nome = inst.property(PROP_NAME)
         if not nome:
             continue
@@ -551,9 +582,9 @@ def posicionar_pelo_xschem(sch_path):
         if nome not in componentes and m and m.group(1) in componentes:
             base, copia = m.group(1), int(m.group(2)) - 1
         if base in componentes:
-            cascas.append((inst, componentes[base], copia))
+            cascas.append((k, inst, componentes[base], copia))
         else:
-            sem_posicao.append(inst)
+            sem_posicao.append((k, inst))
 
     # pinos: os 3 shapes (Metal1 drawing, pin e label) que o importador criou para cada pino
     l_draw, l_pin, l_text = (layout.layer(METAL1_DRAWING), layout.layer(METAL1_PIN), layout.layer(METAL1_TEXT))
@@ -572,38 +603,52 @@ def posicionar_pelo_xschem(sch_path):
         return
 
     # escala proporcional: a menor que evita sobreposicao (copias de m>1 contam como um bloco so)
-    itens = [(p[0], p[1], i.dbbox().width(), i.dbbox().height()) for i, p, c in cascas if c == 0]
+    itens = [(p[0], p[1], i.dbbox().width(), i.dbbox().height()) for _, i, p, c in cascas if c == 0]
     itens += [(p[0], p[1], b.width(), b.height()) for _, b, p in pinos]
     escala = escala_sem_sobreposicao(itens)
 
     # origem (0, 0) = canto mais a esquerda/acima entre os que foram importados (fontes, indutores etc. do .sch nao contam)
-    usados = [p for _, p, _ in cascas] + [p for _, _, p in pinos]
+    usados = [p for _, _, p, _ in cascas] + [p for _, _, p in pinos]
     x0 = min(p[0] for p in usados)
     y0 = min(p[1] for p in usados)
 
     def destino(p):
         return pya.DPoint((p[0] - x0) * escala, -(p[1] - y0) * escala)  # y do xschem cresce para baixo
 
-    for inst, p, copia in cascas:
+    def deslocamento(v):
+        return pya.Trans(pya.Vector(int(round(v.x / layout.dbu)), int(round(v.y / layout.dbu))))
+
+    # Flavio: os movimentos sao calculados primeiro e aplicados no fim por recriar_instancias e
+    # recriar_shapes, porque mover instancias e shapes direto so funciona no modo de edicao
+    novas = {}
+    fundos = []
+    for k, inst, p, copia in cascas:
         b = inst.dbbox()
         alvo = destino(p) + pya.DVector(copia * (b.width() + XSCHEM_GAP_UM), 0)
-        inst.transform(pya.DTrans(alvo - b.center()))
+        desloc = alvo - b.center()
+        novas[k] = inst.cell_inst.transformed(deslocamento(desloc))
+        fundos.append(b.bottom + desloc.y)
 
+    deslocar_pinos = {}
     for juntos, b, p in pinos:
-        desloc = pya.DTrans(destino(p) - b.center())
+        t = deslocamento(destino(p) - b.center())
         for s in juntos:
-            s.transform(desloc)
+            deslocar_pinos[str(s)] = t
 
     # componentes que nao estao no .sch: numa fila abaixo do resto
     if sem_posicao:
-        y_fila = min(i.dbbox().bottom for i, _, _ in cascas) - 10.0 if cascas else 0.0
+        y_fila = min(fundos) - 10.0 if fundos else 0.0
         x = 0.0
-        for inst in sem_posicao:
+        for k, inst in sem_posicao:
             b = inst.dbbox()
-            inst.transform(pya.DTrans(pya.DVector(x - b.left, y_fila - b.top)))
+            novas[k] = inst.cell_inst.transformed(deslocamento(pya.DVector(x - b.left, y_fila - b.top)))
             x += b.width() + XSCHEM_GAP_UM
         print(f"[Import Netlist] Not found in the xschem file (placed in a row below): "
-              f"{[str(i.property(PROP_NAME)) for i in sem_posicao]}")
+              f"{[str(i.property(PROP_NAME)) for _, i in sem_posicao]}")
+
+    recriar_instancias(top_cell, novas)
+    for camada in (l_draw, l_pin, l_text):
+        recriar_shapes(top_cell, camada, deslocar_pinos)
 
     print(f"[Import Netlist] Placed {len(cascas)} components and {len(pinos)} pins from {sch_path} "
           f"(scale {escala:.4f} um per xschem unit)")
@@ -702,6 +747,22 @@ class AvisoUpdate(pya.QDialog):
         self.accept()
 
 
+def trocar_pcell(pcell, novos):
+    """
+    troca parametros do PCell de uma casca. change_pcell_parameters so funciona no modo de edicao,
+    entao cria a variante nova e recria a instancia, com o canto inferior esquerdo na origem da casca,
+    como no import. O PCell e a primeira (e unica) instancia da casca, igual em comparar_netlist.
+    """
+    casca = pcell.parent_cell
+    layout = casca.layout()
+    params = pcell.pcell_parameters_by_name()
+    params.update(novos)
+    variante = layout.add_pcell_variant(pcell.cell.library(), pcell.pcell_declaration().id(), params)
+    b = layout.cell(variante).bbox()
+    recriar_instancias(casca, {0: pya.CellInstArray(variante, pya.Trans(-b.left, -b.bottom))})
+    layout.cleanup()  # apaga a variante antiga, que ficou sem uso (senao vira uma top cell solta)
+
+
 def atualizar(netlist_path):
     """Update netlist - mostra o aviso e, se aceito, troca w/l dos PCells do layout pelos do netlist."""
     try:
@@ -720,18 +781,20 @@ def atualizar(netlist_path):
             print("[Update Netlist] Changes rejected by the user")
             return
 
-        # Flavio: uma transacao so, para o Ctrl+Z desfazer o update inteiro
+        # Flavio: uma transacao so, para o Ctrl+Z desfazer o update inteiro. Fora do modo de edicao o
+        # KLayout nao tem undo e qualquer mudanca dentro de uma transacao falha, entao ela so e aberta
+        # quando o layout e editavel
         view = pya.Application.instance().main_window().current_view()
-        view.transaction("Update netlist")
+        com_undo = pya.CellView.active().layout().is_editable()
+        if com_undo:
+            view.transaction("Update netlist")
         try:
             for pcell, nome, atuais, novos in mudancas:
-                pcell.change_pcell_parameters(novos)
-                # mantem o canto inferior esquerdo do PCell na origem da casca, como no import
-                b = pcell.bbox()
-                pcell.transform(pya.Trans(-b.left, -b.bottom))
+                trocar_pcell(pcell, novos)
                 print(f"[Update Netlist] {nome}: " + ", ".join(f"{k} {formatar_um(atuais[k])} -> {formatar_um(novos[k])}" for k in novos))
         finally:
-            view.commit()
+            if com_undo:
+                view.commit()
         print(f"[Update Netlist] {len(mudancas)} component(s) updated")
     except Exception as e:
         print(f"[Update Netlist] Error: {e}")
