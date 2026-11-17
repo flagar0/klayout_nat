@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="seta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fc3ff"/>
+      <stop offset="1" stop-color="#2f6fd0"/>
+    </linearGradient>
+    <linearGradient id="janela" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dcdcdc"/>
+    </linearGradient>
+  </defs>
+  <!-- seta (import) -->
+  <path d="M6 5.2 H19 V2.2 L26.5 7 L19 11.8 V8.8 H6 Z" fill="url(#seta)" stroke="#1d4a8f" stroke-width="0.9" stroke-linejoin="round"/>
+  <!-- janela do layout -->
+  <rect x="4" y="13.5" width="24" height="16.5" rx="1.2" fill="url(#janela)" stroke="#3a3a3a" stroke-width="1"/>
+  <rect x="4.5" y="14" width="23" height="2.4" fill="#c64a1e"/>
+  <!-- transistor: difusao (verde) cortada pelo gate de poly (vermelho) -->
+  <rect x="8" y="19.5" width="16" height="7.5" fill="#3fbf3f" stroke="#1d6b1d" stroke-width="0.8"/>
+  <rect x="14.6" y="17.6" width="2.8" height="11.3" fill="#e0261f" stroke="#7a0f0b" stroke-width="0.7"/>
+  <rect x="9.6" y="22.1" width="2.2" height="2.2" fill="#1d1d1d"/>
+  <rect x="20.2" y="22.1" width="2.2" height="2.2" fill="#1d1d1d"/>
+</svg>

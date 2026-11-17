@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffdca8"/>
+      <stop offset="1" stop-color="#f09a3c"/>
+    </linearGradient>
+  </defs>
+  <rect x="1.5" y="4.5" width="29" height="23" rx="3" fill="url(#fundo)" stroke="#7a4310" stroke-width="1.2"/>
+  <rect x="3" y="6" width="26" height="4" rx="1.5" fill="#ffffff" fill-opacity="0.35"/>
+  <text x="16" y="20.6" text-anchor="middle" font-family="Verdana, DejaVu Sans, Arial, sans-serif"
+        font-weight="bold" font-size="10.5" letter-spacing="-0.3" fill="#3b1f05">DRC</text>
+</svg>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description>Test Live DRC Plugin</description>
+ <version/>
+ <category>pymacros</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name/>
+ <menu-path>tools_menu.end</menu-path>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text>import pya
+
+print("=" * 60)
+print("DEBUG: Testando Live DRC Plugin")
+print("=" * 60)
+
+# Verifica se plugin carregou
+import sys
+print(f"\nPython path:")
+for p in sys.path:
+    if "PluginNat" in p or "pymacros" in p:
+        print(f"  ✅ {p}")
+
+# Tenta importar
+try:
+    import live_drc
+    print(f"\n✅ live_drc importado: {live_drc}")
+    print(f"   register_plugin: {live_drc.register_plugin}")
+    print(f"   _live_drc_instance: {live_drc._live_drc_instance}")
+
+    if live_drc._live_drc_instance:
+        inst = live_drc._live_drc_instance
+        print(f"\n📊 Estado do plugin:")
+        print(f"   ativo: {inst.ativo}")
+        print(f"   action: {inst.action}")
+        print(f"   main_window: {inst.main_window}")
+
+        # Testa toggle
+        print(f"\n🧪 Testando toggle...")
+        inst.toggle_live_drc()
+
+except Exception as e:
+    print(f"\n❌ Erro ao importar: {e}")
+    import traceback
+    traceback.print_exc()
+
+# Debug sys.argv - pra achar klayout exe
+import sys
+print(f"\n🔍 sys.argv: {sys.argv}")
+print(f"   sys.executable: {sys.executable}")
+
+# Testa se klayout exe funciona
+klayout_exe = sys.argv[0]
+print(f"   klayout_exe candidato: {klayout_exe}")
+
+import os
+if os.path.exists(klayout_exe):
+    print(f"   ✅ Arquivo existe!")
+else:
+    print(f"   ❌ Arquivo NAO existe")
+    # tenta achar em PATH
+    import shutil
+    found = shutil.which("klayout")
+    print(f"   shutil.which('klayout'): {found}")
+
+print("\n" + "=" * 60)
+</text>
+</klayout-macro>

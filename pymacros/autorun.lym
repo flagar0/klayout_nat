@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description>Live DRC Auto-start</description>
+ <version/>
+ <category>pymacros</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>true</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>false</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text>import pya
+import sys
+import os
+
+# Add pymacros to path
+directory = os.path.realpath(os.path.dirname(__file__))
+if directory not in sys.path:
+    sys.path.append(directory)
+
+# Import and register plugin
+from live_drc import register_plugin
+from live_pex import plugin_pex
+from ratsnest import register_ratsnest # Flavio: ratsnest ao selecionar componentes importados
+register_plugin()
+plugin_pex()
+register_ratsnest()
+
+# Flavio: botao Import Netlist. Carregado pelo caminho do arquivo porque o PDK tambem tem um
+# pacote "import_netlist" no sys.path, e um import comum poderia pegar o do PDK
+import importlib.util
+_spec = importlib.util.spec_from_file_location("pluginnat_import_netlist", os.path.join(directory, "import_netlist.py"))
+_import_netlist = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_import_netlist)
+_import_netlist.plugin_import_netlist()
+</text>
+</klayout-macro>
